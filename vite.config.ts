@@ -26,5 +26,5 @@ export default defineConfig({
     }
   ],
 
-  base: "/Soundwave-Spotify-Clone",
+  base: "/Soundwave-Spotify-Clone/Soundwave/",
 });
