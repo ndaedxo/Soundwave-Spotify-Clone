@@ -6,6 +6,7 @@ export interface Song {
   duration: string;
   coverUrl: string;
   liked?: boolean;
+  size: string;
   uploadDate?: string;
   audioData?: string; // Base64 encoded audio data
 }
@@ -15,8 +16,9 @@ export interface Playlist {
   name: string;
   description: string;
   coverUrl: string;
-  songs: string[]; // Array of song IDs
+  songs: Song[];  // Change this from string[] to Song[]
 }
+
 
 export interface PlayerContextType {
   currentSong: Song | null;

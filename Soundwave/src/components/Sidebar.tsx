@@ -1,8 +1,13 @@
 import { Home, Search, Library, Plus, Heart, HardDrive } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { mockPlaylists } from '../mockData';
+import type { Playlist } from '../types';
 
-export default function Sidebar() {
+// Sidebar.tsx
+interface SidebarProps {
+  playlists: Playlist[]; // This is the prop that you need to use
+}
+
+export default function Sidebar({ playlists }: SidebarProps) {
   const location = useLocation();
 
   const isActive = (path: string) => location.pathname === path;
@@ -71,13 +76,12 @@ export default function Sidebar() {
             </p>
           </Link>
 
-          {mockPlaylists.map(playlist => (
+          {/* Use playlists prop here instead of mockPlaylists */}
+          {playlists.map(playlist => (
             <Link
               key={playlist.id}
               to={`/playlist/${playlist.id}`}
-              className={`block p-2 rounded ${
-                isActive(`/playlist/${playlist.id}`) ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'
-              } cursor-pointer`}
+              className={`block p-2 rounded ${isActive(`/playlist/${playlist.id}`) ? 'bg-[#2a2a2a]' : 'hover:bg-[#1a1a1a]'}`}
             >
               <p className="text-sm text-gray-400 font-medium">{playlist.name}</p>
               <p className="text-xs text-gray-500">Playlist</p>

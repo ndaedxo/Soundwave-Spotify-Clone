@@ -10,7 +10,7 @@ interface SongListProps {
 export default function SongList({ songs, showHeader = true }: SongListProps) {
   const { currentSong, isPlaying, setCurrentSong, togglePlay, setPlaylist } = usePlayer();
 
-  const handlePlay = (song: Song, index: number) => {
+  const handlePlay = (song: Song) => {
     if (currentSong?.id === song.id) {
       togglePlay();
     } else {
@@ -18,7 +18,7 @@ export default function SongList({ songs, showHeader = true }: SongListProps) {
       setCurrentSong(song);
     }
   };
-
+  
   return (
     <table className="w-full">
       {showHeader && (
@@ -43,7 +43,7 @@ export default function SongList({ songs, showHeader = true }: SongListProps) {
             <td className="py-3">
               <button 
                 className="w-6 h-6 flex items-center justify-center"
-                onClick={() => handlePlay(song, index)}
+                onClick={() => handlePlay(song)}
               >
                 {currentSong?.id === song.id && isPlaying ? (
                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />

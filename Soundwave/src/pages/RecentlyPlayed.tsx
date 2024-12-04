@@ -3,7 +3,7 @@ import { Play } from 'lucide-react';
 import { usePlayer } from '../context/PlayerContext';
 
 export default function RecentlyPlayed() {
-  const { setCurrentSong, currentSong, isPlaying, togglePlay, setPlaylist } = usePlayer();
+  const { setCurrentSong, currentSong,  togglePlay, setPlaylist } = usePlayer();
 
   const handlePlaySong = (song: typeof recentlyPlayed[0]) => {
     if (currentSong?.id === song.id) {

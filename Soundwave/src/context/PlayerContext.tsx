@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { Song } from '../types';
-import { getQueue, setQueue } from '../services/audioService';
+import { getQueue} from '../services/audioService';
 import toast from 'react-hot-toast';
 
 interface PlayerContextType {
@@ -22,7 +22,13 @@ interface PlayerContextType {
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
   retry: () => Promise<void>;
+  toggleShuffle: () => void;
+  toggleRepeat: () => void;
+  isShuffleOn: boolean;
+  isRepeatOn: boolean;
+  playSong: (song: Song) => void;  // Add playSong to the context type
 }
+
 
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
@@ -35,6 +41,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueueState] = useState<Song[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isShuffleOn, setIsShuffleOn] = useState(false);
+  const [isRepeatOn, setIsRepeatOn] = useState(false);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const progressInterval = useRef<number>();
@@ -175,40 +183,30 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const setPlaylist = (songs: Song[]) => {
-    setQueueState(songs);
-    setQueue(songs.map(s => s.id));
+  const toggleShuffle = () => {
+    setIsShuffleOn((prev) => !prev);
   };
 
-  const addToQueue = (song: Song) => {
-    setQueueState(prev => {
-      const newQueue = [...prev, song];
-      setQueue(newQueue.map(s => s.id));
-      toast.success('Added to queue');
-      return newQueue;
-    });
-  };
-
-  const removeFromQueue = (songId: string) => {
-    setQueueState(prev => {
-      const newQueue = prev.filter(s => s.id !== songId);
-      setQueue(newQueue.map(s => s.id));
-      toast.success('Removed from queue');
-      return newQueue;
-    });
+  const toggleRepeat = () => {
+    setIsRepeatOn((prev) => !prev);
   };
 
   const playNext = async () => {
     if (queue.length === 0 || isLoading) return;
-    
+
     try {
       const currentIndex = queue.findIndex(s => s.id === currentSong?.id);
-      const nextIndex = currentIndex + 1;
-      
-      if (nextIndex < queue.length) {
+      const nextIndex = isShuffleOn
+        ? Math.floor(Math.random() * queue.length)
+        : currentIndex + 1;
+
+      if (nextIndex < queue.length && nextIndex >= 0) {
         setCurrentSong(queue[nextIndex]);
         setIsPlaying(true);
         setError(null);
+      } else if (isRepeatOn) {
+        setCurrentSong(queue[0]);
+        setIsPlaying(true);
       } else {
         setIsPlaying(false);
       }
@@ -218,7 +216,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toast.error('Failed to play next track');
     }
   };
-
+  const setPlaylist = (songs: Song[]) => {
+    setQueueState(songs);
+  };
+  
+  const addToQueue = (song: Song) => {
+    setQueueState((prevQueue) => [...prevQueue, song]);
+  };
+  
+  const removeFromQueue = (songId: string) => {
+    setQueueState((prevQueue) => prevQueue.filter(song => song.id !== songId));
+  };
+  const playSong = (song: Song) => {
+    setCurrentSong(song);  // Assuming `setCurrentSong` changes the song and plays it
+    setIsPlaying(true);    // Set isPlaying to true
+  };
+  
+  
   const playPrevious = async () => {
     if (queue.length === 0 || isLoading) return;
     
@@ -259,20 +273,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       togglePlay,
       setVolume: handleSetVolume,
       seekTo,
+      toggleShuffle,
+      toggleRepeat,
+      isShuffleOn,
+      isRepeatOn,
       setPlaylist,
       addToQueue,
       removeFromQueue,
       playNext,
       playPrevious,
       retry,
+      playSong, // Add playSong here
     }}>
       {children}
     </PlayerContext.Provider>
+    
+    
   );
 }
 
 export function usePlayer() {
   const context = useContext(PlayerContext);
+  
   if (!context) {
     throw new Error('usePlayer must be used within a PlayerProvider');
   }

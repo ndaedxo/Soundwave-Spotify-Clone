@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trash2, HardDrive, AlertCircle, Music2 } from 'lucide-react';
+import { Trash2, HardDrive,  Music2 } from 'lucide-react';
 import { getAllSongs, deleteSong, getStorageInfo } from '../services/audioService';
 import { Song } from '../types';
 import toast from 'react-hot-toast';
@@ -19,11 +19,16 @@ export default function StorageManagement() {
   }, []);
 
   const loadData = async () => {
-    const loadedSongs = getAllSongs();
+    const loadedSongs = await getAllSongs();
     setSongs(loadedSongs);
     const info = await getStorageInfo();
-    setStorageInfo(info);
+    setStorageInfo({
+      used: info.used ?? 0,
+      total: info.total ?? 0,
+      percentage: info.percentage ?? 0,
+    });
   };
+  
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -43,22 +48,24 @@ export default function StorageManagement() {
     setSelectedSongs(newSelected);
   };
 
-  const handleSelectAll = () => {
-    if (selectedSongs.size === songs.length) {
-      setSelectedSongs(new Set());
-    } else {
-      setSelectedSongs(new Set(songs.map(song => song.id)));
-    }
-  };
+  // const handleSelectAll = () => {
+  //   if (selectedSongs.size === songs.length) {
+  //     setSelectedSongs(new Set());
+  //   } else {
+  //     setSelectedSongs(new Set(songs.map(song => song.id)));
+  //   }
+  // };
 
   const handleDelete = async () => {
     if (selectedSongs.size === 0) return;
-    
-    const confirmMessage = selectedSongs.size === 1 
+
+    const confirmMessage = selectedSongs.size === 1
       ? 'Are you sure you want to delete this song?'
       : `Are you sure you want to delete ${selectedSongs.size} songs?`;
-    
-    if (!window.confirm(confirmMessage)) return;
+
+    const result = window.confirm(confirmMessage); // Consider replacing with a modal
+
+    if (!result) return;
 
     setIsDeleting(true);
     try {
@@ -105,78 +112,45 @@ export default function StorageManagement() {
                 {formatSize(storageInfo.used)} / {formatSize(storageInfo.total)}
               </span>
             </div>
-            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div className="w-full bg-gray-700 rounded-full h-2">
               <div
-                className={`h-full ${getStorageColor(storageInfo.percentage)} transition-all`}
+                className={`h-2 rounded-full ${getStorageColor(storageInfo.percentage)}`}
                 style={{ width: `${storageInfo.percentage}%` }}
               />
             </div>
           </div>
         </div>
-
-        {storageInfo.percentage >= 90 && (
-          <div className="flex items-center gap-2 text-sm text-red-400 mt-2">
-            <AlertCircle size={16} />
-            <span>Storage is almost full. Consider deleting some songs.</span>
-          </div>
-        )}
       </div>
 
-      <div className="bg-[#181818] rounded-lg overflow-hidden">
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center gap-4">
-            <input
-              type="checkbox"
-              checked={selectedSongs.size === songs.length && songs.length > 0}
-              onChange={handleSelectAll}
-              className="w-4 h-4 rounded bg-gray-700 border-gray-600"
-            />
-            <span className="text-sm font-medium">
-              {songs.length} song{songs.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-        </div>
-
-        {songs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-            <Music2 size={48} className="mb-4" />
-            <p>No songs uploaded yet</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-800">
-            {songs.map(song => (
+      <div>
+        {songs.length > 0 ? (
+          <div className="space-y-4">
+            {songs.map((song) => (
               <div
                 key={song.id}
-                className={`flex items-center gap-4 p-4 hover:bg-white/5 ${
-                  selectedSongs.has(song.id) ? 'bg-white/10' : ''
-                }`}
+                className="flex justify-between items-center bg-[#242424] rounded-lg p-4"
               >
-                <input
-                  type="checkbox"
-                  checked={selectedSongs.has(song.id)}
-                  onChange={() => handleToggleSelect(song.id)}
-                  className="w-4 h-4 rounded bg-gray-700 border-gray-600"
-                />
-                <img
-                  src={song.coverUrl}
-                  alt={song.title}
-                  className="w-12 h-12 rounded object-cover"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{song.title}</p>
-                  <p className="text-sm text-gray-400 truncate">{song.artist}</p>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedSongs.has(song.id)}
+                    onChange={() => handleToggleSelect(song.id)}
+                    className="h-4 w-4"
+                  />
+                  <Music2 size={24} className="text-gray-400" />
+                  <span className="text-white">{song.title}</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-400">
-                    {formatSize(song.audioData?.length ?? 0)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(song.uploadDate || '').toLocaleDateString()}
-                  </p>
-                </div>
+                <button
+                  onClick={() => deleteSong(song.id)}
+                  className="text-red-500 hover:text-red-400"
+                >
+                  Delete
+                </button>
               </div>
             ))}
           </div>
+        ) : (
+          <div className="text-center text-gray-400">No songs found</div>
         )}
       </div>
     </div>

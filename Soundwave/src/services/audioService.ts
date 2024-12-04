@@ -5,32 +5,38 @@ const STORAGE_KEYS = {
   SONGS: 'uploadedSongs',
   PLAYLISTS: 'userPlaylists',
   LIKED_SONGS: 'likedSongs',
-  QUEUE: 'songQueue'
+  QUEUE: 'songQueue',
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
 const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/mp3'];
 const MIN_STORAGE_BUFFER = 500 * 1024; // 500KB minimum free space
 
-// Storage detection
+// Utility functions
+const formatFileSize = (size: number): string => {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
+
+const formatDuration = (seconds: number): string => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
+const generateUniqueId = (): string => Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+// Storage management
 export async function getStorageInfo() {
   try {
-    let total = 0;
-    let used = 0;
-
-    // Try to detect actual storage limit
-    if (navigator.storage && navigator.storage.estimate) {
-      const estimate = await navigator.storage.estimate();
-      total = estimate.quota || 0;
-      used = estimate.usage || 0;
-    } else {
-      // Fallback to conservative estimate
-      total = 5 * 1024 * 1024; // 5MB
-      used = getStorageUsage();
-    }
-
-    const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
-    return { total, used, percentage };
+    const estimate = await navigator.storage?.estimate() ?? { quota: 5 * 1024 * 1024, usage: 0 };
+    return {
+      total: estimate.quota ?? 0,
+      used: estimate.usage ?? 0, // Default to 0 if usage is undefined
+      percentage: estimate.quota ? Math.round((estimate.usage ?? 0) / estimate.quota * 100) : 0,
+    };
   } catch (error) {
     console.error('Error getting storage info:', error);
     return { total: 0, used: 0, percentage: 0 };
@@ -39,25 +45,19 @@ export async function getStorageInfo() {
 
 export function getStorageUsage(): number {
   try {
-    let total = 0;
-    for (const key in localStorage) {
-      if (localStorage.hasOwnProperty(key)) {
-        total += (localStorage[key]?.length || 0) * 2; // UTF-16 characters = 2 bytes each
-      }
-    }
-    return total;
+    return Object.values(localStorage).reduce((total, value) => total + (value?.length || 0) * 2, 0); // UTF-16
   } catch (error) {
     console.error('Error calculating storage usage:', error);
     return 0;
   }
 }
 
-async function getAvailableStorage(): Promise<number> {
+export async function getAvailableStorage(): Promise<number> {
   const { total, used } = await getStorageInfo();
   return Math.max(0, total - used);
 }
 
-// Queue management functions
+// Queue management
 export function getQueue(): Song[] {
   try {
     const queueData = localStorage.getItem(STORAGE_KEYS.QUEUE);
@@ -77,23 +77,131 @@ export function setQueue(songs: Song[]) {
   }
 }
 
-function generateUniqueId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-async function compressAudioData(audioData: string): Promise<string> {
-  // Basic compression by reducing data URL quality
-  if (audioData.startsWith('data:audio/wav')) {
-    // Convert WAV to MP3-like format by changing the MIME type
-    return audioData.replace('data:audio/wav', 'data:audio/mpeg');
+// Playlist management
+export function getPlaylists(): Playlist[] {
+  try {
+    const playlistsData = localStorage.getItem(STORAGE_KEYS.PLAYLISTS);
+    return playlistsData ? JSON.parse(playlistsData) : [];
+  } catch (error) {
+    console.error('Error getting playlists:', error);
+    return [];
   }
-  return audioData;
+}
+
+export function addSongsToPlaylist(playlistId: string, songs: Song[]): Playlist | null {
+  try {
+    const playlists = getPlaylists();
+    const playlist = playlists.find(p => p.id === playlistId);
+    if (!playlist) throw new Error('Playlist not found');
+    
+    playlist.songs.push(...songs.map(song => song)); // Add only song IDs, not the full song object
+    localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+
+    return playlist;
+  } catch (error) {
+    console.error('Error adding songs to playlist:', error);
+    return null;
+  }
+}
+
+export function createPlaylist(name: string, description: string): Playlist {
+  const newPlaylist: Playlist = {
+    id: generateUniqueId(),
+    name,
+    description,
+    coverUrl: "https://images.unsplash.com/photo-1611339555312-e607c8352fd7",
+    songs: [],
+  };
+  try {
+    const playlists = getPlaylists();
+    playlists.push(newPlaylist);
+    localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+    return newPlaylist;
+  } catch (error) {
+    console.error('Error creating playlist:', error);
+    toast.error('Failed to create playlist');
+    throw error;
+  }
+}
+
+// Song management
+export async function deleteSong(songId: string): Promise<boolean> {
+  try {
+    let success = true;
+    const songs = getAllSongs();
+    const updatedSongs = songs.filter(song => song.id !== songId);
+    if (updatedSongs.length === songs.length) success = false;
+    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(updatedSongs));
+
+    // Update playlists
+    const playlists = getPlaylists();
+    playlists.forEach(playlist => {
+      playlist.songs = playlist.songs.filter(id => id.id !== songId);
+    });
+    localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(playlists));
+
+    // Update queue
+    const queue = getQueue();
+    const updatedQueue = queue.filter(song => song.id !== songId);
+    setQueue(updatedQueue);
+
+    return success;
+  } catch (error) {
+    console.error('Error deleting song:', error);
+    toast.error('Failed to delete song');
+    return false;
+  }
+}
+
+export async function uploadAudio(file: File): Promise<Song | null> {
+  try {
+    if (!ALLOWED_AUDIO_TYPES.includes(file.type)) {
+      toast.error('Only MP3 and WAV files are allowed');
+      return null;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('File size exceeds the 10MB limit');
+      return null;
+    }
+
+    const audioData = await readFileAsDataUrl(file);
+    const compressedAudioData = await compressAudioData(audioData);
+    const estimatedSize = compressedAudioData.length * 2; // Assuming UTF-16
+
+    const availableStorage = await getAvailableStorage();
+    if (estimatedSize + MIN_STORAGE_BUFFER > availableStorage) {
+      toast.error('Not enough storage space');
+      return null;
+    }
+
+    const audio = new Audio(compressedAudioData);
+    await new Promise((res, rej) => {
+      audio.onloadedmetadata = res;
+      audio.onerror = rej;
+    });
+
+    const newSong: Song = {
+      id: generateUniqueId(),
+      title: file.name.replace(/\.[^/.]+$/, ""),
+      artist: "Unknown Artist",
+      album: "Unknown Album",
+      size: formatFileSize(file.size),
+      coverUrl: "https://images.unsplash.com/photo-1611339555312-e607c8352fd7",
+      duration: formatDuration(audio.duration),
+      uploadDate: new Date().toISOString(),
+      audioData: compressedAudioData,
+    };
+
+    const songs = getAllSongs();
+    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify([...songs, newSong]));
+    toast.success('Song uploaded successfully');
+    return newSong;
+  } catch (error) {
+    console.error('Error uploading song:', error);
+    toast.error('Failed to upload song');
+    return null;
+  }
 }
 
 export function getAllSongs(): Song[] {
@@ -106,147 +214,28 @@ export function getAllSongs(): Song[] {
   }
 }
 
-export function getPlaylists(): Playlist[] {
-  try {
-    const playlistsData = localStorage.getItem(STORAGE_KEYS.PLAYLISTS);
-    return playlistsData ? JSON.parse(playlistsData) : [];
-  } catch (error) {
-    console.error('Error getting playlists:', error);
-    return [];
-  }
-}
-
-export async function deleteSong(songId: string): Promise<boolean> {
-  try {
-    const songs = getAllSongs();
-    const updatedSongs = songs.filter(song => song.id !== songId);
-    localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify(updatedSongs));
-
-    // Update playlists
-    const playlists = getPlaylists();
-    const updatedPlaylists = playlists.map(playlist => ({
-      ...playlist,
-      songs: playlist.songs.filter(id => id !== songId)
-    }));
-    localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify(updatedPlaylists));
-
-    // Update queue
-    const queue = getQueue();
-    const updatedQueue = queue.filter(song => song.id !== songId);
-    setQueue(updatedQueue);
-
-    return true;
-  } catch (error) {
-    console.error('Error deleting song:', error);
-    throw new Error('Failed to delete song');
-  }
-}
-
-export async function uploadAudio(file: File): Promise<Song | null> {
-  try {
-    // Validate file
-    if (!ALLOWED_AUDIO_TYPES.includes(file.type)) {
-      toast.error('Please upload MP3 or WAV files only');
-      return null;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error('File is too large (maximum 10MB)');
-      return null;
-    }
-
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      
-      reader.onload = async (event) => {
-        try {
-          if (!event.target?.result) {
-            throw new Error('Failed to read file');
-          }
-
-          const originalAudioData = event.target.result as string;
-          const audioData = await compressAudioData(originalAudioData);
-          
-          // Check storage availability
-          const estimatedSize = audioData.length * 2;
-          const availableStorage = await getAvailableStorage();
-
-          if (estimatedSize + MIN_STORAGE_BUFFER > availableStorage) {
-            throw new Error(
-              'Not enough storage space available. Please delete some songs first.'
-            );
-          }
-
-          const audio = new Audio(audioData);
-          
-          await new Promise((res, rej) => {
-            audio.onloadedmetadata = () => res(null);
-            audio.onerror = () => rej(new Error('Invalid audio file'));
-          });
-
-          const newSong: Song = {
-            id: generateUniqueId(),
-            title: file.name.replace(/\.[^/.]+$/, ""),
-            artist: "Unknown Artist",
-            album: "Unknown Album",
-            coverUrl: "https://images.unsplash.com/photo-1611339555312-e607c8352fd7",
-            duration: formatDuration(audio.duration),
-            uploadDate: new Date().toISOString(),
-            audioData,
-          };
-
-          const storedSongs = getAllSongs();
-          localStorage.setItem(STORAGE_KEYS.SONGS, JSON.stringify([...storedSongs, newSong]));
-          toast.success('Song uploaded successfully');
-          resolve(newSong);
-        } catch (error) {
-          console.error('Error processing audio:', error);
-          toast.error(error.message || 'Error processing audio file');
-          resolve(null);
-        }
-      };
-
-      reader.onerror = () => {
-        toast.error('Error reading file');
-        resolve(null);
-      };
-
-      reader.readAsDataURL(file);
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    toast.error('Failed to upload file');
-    return null;
-  }
-}
-
-export function createPlaylist(name: string, description: string): Playlist {
-  const newPlaylist: Playlist = {
-    id: generateUniqueId(),
-    name,
-    description,
-    coverUrl: "https://images.unsplash.com/photo-1611339555312-e607c8352fd7",
-    songs: []
-  };
-
-  try {
-    const playlists = getPlaylists();
-    localStorage.setItem(STORAGE_KEYS.PLAYLISTS, JSON.stringify([...playlists, newPlaylist]));
-    return newPlaylist;
-  } catch (error) {
-    console.error('Error creating playlist:', error);
-    toast.error('Failed to create playlist');
-    throw error;
-  }
-}
-
 export function searchSongs(query: string): Song[] {
   const songs = getAllSongs();
-  const searchQuery = query.toLowerCase();
-  
-  return songs.filter(song => 
-    song.title.toLowerCase().includes(searchQuery) ||
-    song.artist.toLowerCase().includes(searchQuery) ||
-    song.album.toLowerCase().includes(searchQuery)
+  const lowercasedQuery = query.toLowerCase();
+  return songs.filter(song =>
+    song.title.toLowerCase().includes(lowercasedQuery) ||
+    song.artist.toLowerCase().includes(lowercasedQuery) ||
+    song.album.toLowerCase().includes(lowercasedQuery)
   );
 }
+
+async function compressAudioData(audioData: string): Promise<string> {
+  if (audioData.startsWith('data:audio/wav')) {
+    return audioData.replace('data:audio/wav', 'data:audio/mpeg');
+  }
+  return audioData;
+}
+
+const readFileAsDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};

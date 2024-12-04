@@ -28,94 +28,64 @@ export default function Player() {
   if (!currentSong) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#181818] border-t border-[#282828] px-4 py-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 w-[30%]">
-          <img 
-            src={currentSong.coverUrl}
-            alt={currentSong.title}
-            className="h-14 w-14 rounded"
-          />
-          <div>
-            <h4 className="text-sm text-white">{currentSong.title}</h4>
-            <p className="text-xs text-gray-400">{currentSong.artist}</p>
-          </div>
-        </div>
+    <div className="fixed bottom-0 left-0 right-0 bg-[#181818] border-t border-[#333] p-4 flex items-center justify-between">
+      <div className="flex items-center">
+      <img src={currentSong.coverUrl} alt={currentSong.title} className="w-12 h-12 object-cover mr-4" />
 
-        <div className="flex flex-col items-center gap-2 w-[40%]">
-          <div className="flex items-center gap-6">
-            <button 
-              className={`text-gray-400 hover:text-white ${isShuffleOn ? 'text-green-500' : ''}`}
-              onClick={toggleShuffle}
-            >
-              <Shuffle size={20} />
-            </button>
-            <button 
-              className="text-gray-400 hover:text-white"
-              onClick={playPrevious}
-            >
-              <SkipBack size={20} />
-            </button>
-            <button 
-              className="bg-white rounded-full p-2 hover:scale-105 transition"
-              onClick={togglePlay}
-            >
-              {isPlaying ? (
-                <Pause size={20} fill="black" />
-              ) : (
-                <Play size={20} fill="black" />
-              )}
-            </button>
-            <button 
-              className="text-gray-400 hover:text-white"
-              onClick={playNext}
-            >
-              <SkipForward size={20} />
-            </button>
-            <button 
-              className={`text-gray-400 hover:text-white ${isRepeatOn ? 'text-green-500' : ''}`}
-              onClick={toggleRepeat}
-            >
-              <Repeat size={20} />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 w-full">
-            <span className="text-xs text-gray-400">{formatTime(progress)}</span>
-            <div 
-              className="h-1 flex-1 bg-[#4d4d4d] rounded-full cursor-pointer"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const percent = x / rect.width;
-                seekTo(percent * duration);
-              }}
-            >
-              <div 
-                className="h-1 bg-white rounded-full"
-                style={{ width: `${(progress / duration) * 100}%` }}
-              />
-            </div>
-            <span className="text-xs text-gray-400">{formatTime(duration)}</span>
-          </div>
+        <div>
+          <div className="text-white">{currentSong.title}</div>
+          <div className="text-gray-400 text-sm">{currentSong.artist}</div>
         </div>
+      </div>
 
-        <div className="flex items-center gap-2 w-[30%] justify-end">
-          <Volume2 size={20} className="text-gray-400" />
-          <div 
-            className="h-1 w-24 bg-[#4d4d4d] rounded-full cursor-pointer"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const percent = x / rect.width;
-              setVolume(percent);
-            }}
-          >
-            <div 
-              className="h-1 bg-white rounded-full"
-              style={{ width: `${volume * 100}%` }}
-            />
-          </div>
+      <div className="flex items-center space-x-4">
+        <button onClick={toggleShuffle} className={`${isShuffleOn ? 'text-green-500' : 'text-white'}`}>
+          <Shuffle />
+        </button>
+
+        <button onClick={playPrevious} className="text-white">
+          <SkipBack />
+        </button>
+
+        <button onClick={togglePlay} className="text-white">
+          {isPlaying ? <Pause /> : <Play />}
+        </button>
+
+        <button onClick={playNext} className="text-white">
+          <SkipForward />
+        </button>
+
+        <button onClick={toggleRepeat} className={`${isRepeatOn ? 'text-green-500' : 'text-white'}`}>
+          <Repeat />
+        </button>
+      </div>
+
+      <div className="flex items-center">
+        <input
+          type="range"
+          value={progress}
+          max={duration}
+          step="1"
+          onChange={(e) => seekTo(Number(e.target.value))}
+          className="w-24"
+        />
+        <div className="text-white text-sm">
+          {formatTime(progress)} / {formatTime(duration)}
         </div>
+      </div>
+
+      <div className="flex items-center">
+        <button onClick={() => setVolume(Math.max(0, volume - 0.1))} className="text-white">
+          <Volume2 />
+        </button>
+        <input
+          type="range"
+          value={volume}
+          max={1}
+          step="0.01"
+          onChange={(e) => setVolume(Number(e.target.value))}
+          className="w-24"
+        />
       </div>
     </div>
   );
